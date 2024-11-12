@@ -19,16 +19,19 @@
 param (
     [Parameter(Mandatory = $true)]
     [pscredential]
-    $PVWACreds
+    $PVWACreds,
+    [Parameter(Mandatory = $true)][string]$PVWAUrl
 )
 
 #region Variables
-$PVWAUrl = "https://pvwa.basgiath.uk/PasswordVault/"
+#$PVWAUrl = "https://pvwa.basgiath.uk/PasswordVault/"
 $PVWAAuthSuffix = "API/auth/Cyberark/Logon/"
 $PVWALogonUrl= $PVWAUrl + $PVWAAuthSuffix
 $PVWAGetAccountsSuffix = "API/Accounts"
 $PVWAAccountsUrl = $PVWAUrl + $PVWAGetAccountsSuffix
 $PVWAAccountActivitySuffix = "WebServices/PIMServices.svc/Accounts/"
+$PVWAGetUsersSuffix = "API/Users?ExtendedDetails=true"
+$PVWAGetUsersUrl = $PVWAUrl + $PVWAGetUsersSuffix
 #$PVWACreds = Get-Credential
 #endregion
 
@@ -64,6 +67,11 @@ function Get-AccountDetails {
     Invoke-WebRequest -Uri $uri -Method Get -Headers @{'Authorization' = "$AuthTrimmed"} -ContentType "application/json"
     Add-Member -InputObject $Account -NotePropertyName "TestName" -NotePropertyValue "TestValue2"
 }
+
+function Get-Users{
+    (Invoke-WebRequest -Uri $PVWAGetUsersUrl -Method Get -Headers @{'Authorization' = "$AuthTrimmed"} -ContentType "application/json").Content
+}
+
 #endregion
 
 
@@ -75,4 +83,7 @@ foreach($Account in $Accounts){
     (Get-AccountDetails -Account $Account).Content | ConvertFrom-Json
 }
 $Accounts[0]
+[psobject[]]$Users = (Get-Users | ConvertFrom-Json).Users
+$Users
+$Users.count
 #endregion
