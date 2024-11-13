@@ -1,16 +1,25 @@
 <#
 .SYNOPSIS
-    Generates reports from a CyberArk Vault
+    Generates reports from a CyberArk Vault. Uses the officially-supported REST API provided by the PVWA.
 .DESCRIPTION
-    Uses the officially-supported REST-ful API, provided by the PVWA
+    Capable of exporting lists of accounts, safes and users.
+    The PVWA address must be entered strictly per this example: "https://pvwa.local/PasswordVault/", including 'https://' and the final '/'.
+    This script may throw an error when reaching the last page of accounts - this is a known issue, the script should continue to run and export all accounts.
+
+    Accounts will be exported with a default page size of 50, for each REST API request. This can be customised with the -AccountsPageSize parameter.
+
+    When running this script, call the parameter switches for the report(s) you'd like to run - see examples.
+    This script will accept a PSCredential option as an object parameter, rather than having to enter credentials each time. See examples.
+    This script will accept a PVWA Address option as a string parameter, rather than having to enter credentials each time. See examples.
 .NOTES
     Author : Matt Price (matt@mattprice.eu)
     This script is a community effort - it is not supported by CyberArk
 .LINK
     No online documentation is currently available for this script
 .EXAMPLE
-    .\vaultReport.ps1 -PVWACreds $PVWACreds --runs automatically
-    .\vaultReport.ps1 --prompts each time for credentials
+    .\vaultReport.ps1 -PVWACreds $PVWACreds -PVWAURL "https://pvwa.local/PasswordVault/" -AccountsPageSize 100 -ReportAccounts -ReportUsers -ReportSafes
+.EXAMPLE
+    .\vaultReport.ps1 -ReportUsers
 #>
 
 
@@ -64,6 +73,7 @@ function Get-Accounts {
     $PaginatedPVWAAccountsURL = $PVWAAccountsUrl + '?offset=' + $offset + '&limit=' +$offsetIncrement
     (Invoke-WebRequest -Uri $PaginatedPVWAAccountsURL -Method Get -Headers @{'Authorization' = "$AuthTrimmed"} -ContentType "application/json").Content
 }
+
 
 function Get-Users{
     (Invoke-WebRequest -Uri $PVWAGetUsersUrl -Method Get -Headers @{'Authorization' = "$AuthTrimmed"} -ContentType "application/json").Content
