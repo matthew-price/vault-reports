@@ -20,7 +20,9 @@ param (
     [Parameter(Mandatory = $true)]
     [pscredential]
     $PVWACreds,
-    [Parameter(Mandatory = $true)][string]$PVWAUrl
+    [Parameter(Mandatory = $true)][string]$PVWAUrl,
+    [switch]$ReportAccounts,
+    [switch]$ReportUsers
 )
 
 #region Variables
@@ -83,30 +85,39 @@ function Get-Users{
 
 #region Run reports
 $AuthTrimmed = Request-PvwaAuthToken -cred $PVWACreds
-$MoreAccountsToProcess = $true
-$offset = 0
-$offsetIncrement = 50
-while ($MoreAccountsToProcess){
-    [psobject[]]$Accounts += (Get-Accounts -offset $offset | ConvertFrom-Json).value
-    if ($offset -le $Accounts.Count){
-    $offset = ($offset + $offsetIncrement)
-    #Write-Host $offset "accounts processed so far"
-    Write-Progress -Activity "Exporting accounts" -Status "$offset accounts processed so far" -PercentComplete -1
-    }
-    else {
-        $MoreAccountsToProcess = $false
-        Write-Host $offset "accounts processed in total"
-    }
-}
-#foreach($Account in $Accounts){
-#    (Get-AccountDetails -Account $Account).Content | ConvertFrom-Json
-#}
-$Accounts[0]
 
-[psobject[]]$Users = (Get-Users | ConvertFrom-Json).Users
-$Users.count
-$Users[0] | Select-Object -Property name
-$Accounts | Select-Object -Property name,address,userName,id,platformId,safeName,createdTime,secretManagement,platformAccountProperties | Export-Csv -Path .\output.csv
+if ($ReportAccounts){
+
+    $MoreAccountsToProcess = $true
+    $offset = 0
+    $offsetIncrement = 50
+    while ($MoreAccountsToProcess){
+        [psobject[]]$Accounts += (Get-Accounts -offset $offset | ConvertFrom-Json).value
+        if ($offset -le $Accounts.Count){
+        $offset = ($offset + $offsetIncrement)
+        #Write-Host $offset "accounts processed so far"
+        Write-Progress -Activity "Exporting accounts" -Status "$offset accounts processed so far" -PercentComplete -1
+        }
+        else {
+            $MoreAccountsToProcess = $false
+            Write-Host $offset "accounts processed in total"
+        }
+    }
+    $Accounts | Select-Object -Property name,address,userName,id,platformId,safeName,createdTime,secretManagement,platformAccountProperties | Export-Csv -Path .\accounts-report.csv
+}
+
+if ($ReportUsers){
+    Write-Progress -Activity "Exporting users" -Status "Processing..." -PercentComplete -1
+    [psobject[]]$Users = (Get-Users | ConvertFrom-Json).Users
+    Write-Host $Users.count "users processed in total"
+
+    # Cast the vaultAuthorization parameter (only) from Object[] to String, to better allow Export-Csv to format the permissions
+    foreach ($User in $Users){
+        $User.vaultAuthorization = [String]$User.vaultAuthorization
+    }
+    $Users | Select-Object -Property username,id,source,userType,vaultAuthorization,suspended | Export-Csv -Path .\users-report.csv
+}
+
 
 
 #endregion
