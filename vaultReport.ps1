@@ -85,9 +85,12 @@ function Get-Safes{
 $AuthTrimmed = Request-PvwaAuthToken -cred $PVWACreds
 
 if ($ReportAccounts){
-
     $MoreAccountsToProcess = $true
     $offset = 0
+    if ($AccountsPageSize -gt 1000){
+        Write-Warning "PVWA may not support page sizes greater than 1000!"
+        Read-Host "Press ENTER if you're sure you want to continue, or ctrl+c to abort."
+    }
     $offsetIncrement = $AccountsPageSize
     while ($MoreAccountsToProcess){
         [psobject[]]$Accounts += (Get-Accounts -offset $offset -offsetIncrement $offsetIncrement | ConvertFrom-Json).value
