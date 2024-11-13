@@ -22,20 +22,21 @@ param (
     $PVWACreds,
     [Parameter(Mandatory = $true)][string]$PVWAUrl,
     [switch]$ReportAccounts,
-    [switch]$ReportUsers
+    [switch]$ReportUsers,
+    [switch]$ReportSafes,
+    [int]$AccountsPageSize = 50
 )
 
 #region Variables
-#$PVWAUrl = "https://pvwa.basgiath.uk/PasswordVault/"
 $PVWAAuthSuffix = "API/auth/Cyberark/Logon/"
-$PVWALogonUrl= $PVWAUrl + $PVWAAuthSuffix
 $PVWAGetAccountsSuffix = 'API/Accounts'
-$PVWAAccountsUrl = $PVWAUrl + $PVWAGetAccountsSuffix
-$PVWAAccountActivitySuffix = "WebServices/PIMServices.svc/Accounts/"
 $PVWAGetUsersSuffix = "API/Users?ExtendedDetails=true"
+$PVWAGetSafesSuffix = "API/Safes"
+
+$PVWALogonUrl= $PVWAUrl + $PVWAAuthSuffix
+$PVWAAccountsUrl = $PVWAUrl + $PVWAGetAccountsSuffix
 $PVWAGetUsersUrl = $PVWAUrl + $PVWAGetUsersSuffix
-#$PVWACreds = Get-Credential
-$accountsProcessed = 0
+$PVWAGetSafesUrl = $PVWAUrl + $PVWAGetSafesSuffix
 #endregion
 
 
@@ -57,26 +58,23 @@ function Request-PvwaAuthToken {
 
 function Get-Accounts {
     param(
-        $offset
+        $offset,
+        $offsetIncrement
     )
-    $PaginatedPVWAAccountsURL = $PVWAAccountsUrl + '?offset=' + $offset + '&limit=50'
+    $PaginatedPVWAAccountsURL = $PVWAAccountsUrl + '?offset=' + $offset + '&limit=' +$offsetIncrement
     (Invoke-WebRequest -Uri $PaginatedPVWAAccountsURL -Method Get -Headers @{'Authorization' = "$AuthTrimmed"} -ContentType "application/json").Content
 }
 
-# name,address,userName,platformId,safeName,createdTime
-<#
-function Get-AccountDetails {
-    param (
-        [psobject]$Account
-    )
-    $AccountID =  $Account.id
-    $uri = $PVWAAccountsUrl + "/$AccountID"
-    Invoke-WebRequest -Uri $uri -Method Get -Headers @{'Authorization' = "$AuthTrimmed"} -ContentType "application/json"
-    Add-Member -InputObject $Account -NotePropertyName "TestName" -NotePropertyValue "TestValue2"
-}
-#>
 function Get-Users{
     (Invoke-WebRequest -Uri $PVWAGetUsersUrl -Method Get -Headers @{'Authorization' = "$AuthTrimmed"} -ContentType "application/json").Content
+}
+
+function Get-Safes{
+    param(
+        $offset
+    )
+    $PaginatedPVWASafesURL = $PVWAGetSafesUrl + '?offset=' + $offset + '&limit=50'
+    (Invoke-WebRequest -Uri $PaginatedPVWASafesURL -Method Get -Headers @{'Authorization' = "$AuthTrimmed"} -ContentType "application/json").Content
 }
 
 #endregion
@@ -90,26 +88,36 @@ if ($ReportAccounts){
 
     $MoreAccountsToProcess = $true
     $offset = 0
-    $offsetIncrement = 50
+    $offsetIncrement = $AccountsPageSize
     while ($MoreAccountsToProcess){
-        [psobject[]]$Accounts += (Get-Accounts -offset $offset | ConvertFrom-Json).value
+        [psobject[]]$Accounts += (Get-Accounts -offset $offset -offsetIncrement $offsetIncrement | ConvertFrom-Json).value
         if ($offset -le $Accounts.Count){
-        $offset = ($offset + $offsetIncrement)
-        #Write-Host $offset "accounts processed so far"
-        Write-Progress -Activity "Exporting accounts" -Status "$offset accounts processed so far" -PercentComplete -1
+            $offset = ($offset + $offsetIncrement)
+            Write-Progress -Activity "Exporting accounts" -Status "$offset accounts processed so far" -PercentComplete -1
         }
         else {
             $MoreAccountsToProcess = $false
-            Write-Host $offset "accounts processed in total"
+            Write-Host $Accounts.Count "accounts processed in total"
         }
     }
     $Accounts | Select-Object -Property name,address,userName,id,platformId,safeName,createdTime,secretManagement,platformAccountProperties | Export-Csv -Path .\accounts-report.csv
 }
 
 if ($ReportUsers){
-    Write-Progress -Activity "Exporting users" -Status "Processing..." -PercentComplete -1
-    [psobject[]]$Users = (Get-Users | ConvertFrom-Json).Users
-    Write-Host $Users.count "users processed in total"
+    $MoreUsersToProcess = $true
+    $offset = 0
+    $offsetIncrement = 25
+    while ($MoreUsersToProcess){
+        [psobject[]]$Users += (Get-Users | ConvertFrom-Json).Users
+        if  ($offset -le $Users.Count){
+            $offset = ($offset + $offsetIncrement)
+            Write-Progress -Activity "Exporting users" -Status "$offset users processed so far" -PercentComplete -1
+        }
+        else {
+            $MoreUsersToProcess = $false
+            Write-Host $Users.Count "users processed in total"
+        }
+    }
 
     # Cast the vaultAuthorization parameter (only) from Object[] to String, to better allow Export-Csv to format the permissions
     foreach ($User in $Users){
@@ -118,6 +126,23 @@ if ($ReportUsers){
     $Users | Select-Object -Property username,id,source,userType,vaultAuthorization,suspended | Export-Csv -Path .\users-report.csv
 }
 
+if ($ReportSafes){
+    $MoreSafesToProcess = $true
+    $offset = 0
+    $offsetIncrement = 50
+    while ($MoreSafesToProcess){
+        [psobject[]]$Safes += (Get-Safes -offset $offset | ConvertFrom-Json).value
+        if ($offset -le $Safes.Count){
+            $offset = ($offset + $offsetIncrement)
+            Write-Progress -Activity "Exporting Safes" -Status "$offset Safes processed so far" -PercentComplete -1
+        }
+        else {
+            $MoreSafesToProcess = $false
+            Write-Host $Safes.Count "Safes processed in total"
+        }
+    }
+    $Safes | Select-Object -Property safeName,safeNumber,description,managingCPM,numberOfDaysRetention,numberOfVersionsRetention,olacEnabled,creator,creationTime,lastModificationTime | Export-Csv -Path .\safes-report.csv
+}
 
 
 #endregion
