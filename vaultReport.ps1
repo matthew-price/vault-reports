@@ -113,7 +113,15 @@ if ($ReportAccounts){
             Write-Host $Accounts.Count "accounts processed in total"
         }
     }
-    $Accounts | Select-Object -Property name,address,userName,id,platformId,safeName,createdTime,secretManagement,platformAccountProperties | Export-Csv -Path .\accounts-report.csv
+    foreach ($Account in $Accounts){
+        $Account | Add-Member -NotePropertyName isAutomaticManagementEnabled -NotePropertyValue $Account.secretManagement.automaticManagementEnabled
+        $Account | Add-Member -NotePropertyName reasonForManualManagement -NotePropertyValue $Account.secretManagement.manualManagementReason
+    }
+
+    $Accounts | Select-Object -Property name,address,userName,id,platformId,safeName,createdTime,secretManagement,isAutomaticManagementEnabled,reasonForManualManagement,platformAccountProperties | Export-Csv -Path .\accounts-report.csv
+    $Accounts[0].secretManagement
+    $Accounts[0].secretManagement.automaticManagementEnabled
+    $Accounts[0].secretManagement.manualManagementReason
 }
 
 if ($ReportUsers){
